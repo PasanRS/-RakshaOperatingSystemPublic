@@ -1,0 +1,9 @@
+[Unit]
+Description=Raksha initramfs integrity preflight
+After=local-fs.target
+Before=shutdown.target reboot.target halt.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/raksha/verify-initramfs.sh
+TimeoutStartSec=30s

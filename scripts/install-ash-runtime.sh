@@ -193,6 +193,9 @@ log "[9/10] Installing systemd services..."
 SYSTEMD_SRC="${REPO_DIR}/systemd"
 SYSTEMD_DST="/etc/systemd/system"
 
+install -D -m 0755 "${REPO_DIR}/scripts/verify/verify-initramfs.sh" \
+  /usr/lib/raksha/verify-initramfs.sh
+
 for unit in "${SYSTEMD_SRC}"/*.service "${SYSTEMD_SRC}"/*.timer; do
   [ -f "$unit" ] || continue
   cp "$unit" "${SYSTEMD_DST}/"
@@ -210,6 +213,8 @@ SERVICES_ENABLE=(
   ash-heartbeat.timer
   ash-dreaming.timer
   ash-memory.timer
+  raksha-initramfs-check.timer
+  raksha-initramfs-reboot-preflight.service
 )
 
 for svc in "${SERVICES_ENABLE[@]}"; do

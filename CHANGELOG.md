@@ -15,6 +15,7 @@ The private Raksha OS Core has advanced beyond v1.0.4 with the following work no
 - Added Debian-stratum v5.2 repair, rebuild, rootfs, squashfs, and installer verification tooling.
 - Added credential-free Codex handoff, startup, and portability scripts for continuing Raksha work across machines.
 - Added the generated Fastfetch schema snapshot used by the system inventory surface.
+- Added a read-only initramfs preflight script, periodic timer, and final reboot/halt hook to catch missing or unreadable initramfs files before the next boot.
 
 These changes are not claimed as a public release yet. They need a sanitized public port, validation on the target installation, and release evidence before being attached to an ISO.
 

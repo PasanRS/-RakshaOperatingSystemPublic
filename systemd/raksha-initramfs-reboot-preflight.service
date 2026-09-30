@@ -1,0 +1,13 @@
+[Unit]
+Description=Raksha final initramfs check before reboot or halt
+DefaultDependencies=no
+After=local-fs.target
+Before=reboot.target halt.target shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/raksha/verify-initramfs.sh
+TimeoutStartSec=30s
+
+[Install]
+WantedBy=reboot.target halt.target

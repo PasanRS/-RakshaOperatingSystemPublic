@@ -1,0 +1,12 @@
+[Unit]
+Description=Periodically verify the Raksha initramfs
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+Unit=raksha-initramfs-check.service
+AccuracySec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

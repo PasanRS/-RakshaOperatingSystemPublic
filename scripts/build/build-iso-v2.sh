@@ -178,6 +178,10 @@ done
 
 log "Installing Ash nervous system..."
 
+# Install the read-only boot preflight before registering systemd units.
+install -D -m 0755 "${REPO_DIR}/scripts/verify/verify-initramfs.sh" \
+    "${WORK_DIR}/rootfs/usr/lib/raksha/verify-initramfs.sh"
+
 # Systemd units
 mkdir -p "${WORK_DIR}/rootfs/etc/systemd/system"
 cp "${REPO_DIR}/systemd/"*.service "${REPO_DIR}/systemd/"*.timer "${WORK_DIR}/rootfs/etc/systemd/system/" 2>/dev/null || true
@@ -371,7 +375,8 @@ log "Enabling Ash services..."
 
 for svc in llama-server.service ash-core.timer ash-heartbeat.timer \
            ash-dreaming.timer ash-memory.timer ash-defibrillator.service \
-           ash-interface.service; do
+           ash-interface.service raksha-initramfs-check.timer \
+           raksha-initramfs-reboot-preflight.service; do
     if [ -f "${WORK_DIR}/rootfs/etc/systemd/system/$svc" ]; then
         systemctl --root="${WORK_DIR}/rootfs" enable "$svc" 2>/dev/null || true
         log "  ✅ Enabled: $svc"

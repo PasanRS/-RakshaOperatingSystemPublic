@@ -229,6 +229,8 @@ start_services() {
         ash-heartbeat.timer
         ash-dreaming.timer
         ash-memory.timer
+        raksha-initramfs-check.timer
+        raksha-initramfs-reboot-preflight.service
     )
 
     for svc in "${ENABLE[@]}"; do
