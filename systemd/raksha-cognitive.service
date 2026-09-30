@@ -1,0 +1,14 @@
+[Unit]
+Description=Raksha OS Sovereign Cognitive Engine (Gemma-4-E2B)
+After=network.target
+
+[Service]
+Type=simple
+User=ravan
+WorkingDirectory=/home/ravan/llama.cpp
+ExecStart=/bedrock/bin/strat debian /home/ravan/llama.cpp/build/bin/llama-server -m /home/ravan/llama.cpp/models/gemma-4-E2B_q4_0-it.gguf -ngl 99 -c 131072 --port 8080
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

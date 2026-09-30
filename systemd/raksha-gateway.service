@@ -1,0 +1,23 @@
+[Unit]
+Description=Raksha OS Control — Gateway + Dashboard (port 8888)
+Documentation=https://github.com/PasanRS/Raksha-OS-Core
+After=network.target raksha-cognitive.service
+Wants=raksha-cognitive.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+Environment=HOME=/root
+Environment=NODE_ENV=production
+Environment=OPENCLAW_CONFIG_PATH=/home/ravan/.raksha/gateway.json
+Environment=OPENCLAW_STATE_DIR=/var/lib/ash/gateway
+
+ExecStart=/usr/bin/node /bedrock/strata/arch/root/.hermes/node/lib/node_modules/openclaw/openclaw.mjs gateway --auth none --port 8888 --bind loopback
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/lib/ash/logs/gateway.log
+StandardError=append:/var/lib/ash/logs/gateway.log
+
+[Install]
+WantedBy=multi-user.target

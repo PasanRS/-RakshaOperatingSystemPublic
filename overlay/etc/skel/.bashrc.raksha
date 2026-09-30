@@ -1,0 +1,12 @@
+
+# Raksha OS additions
+if [ -f /etc/raksha/raksha.sh ]; then
+    source /etc/raksha/raksha.sh
+fi
+
+# Aliases
+alias ash='python3 /usr/local/lib/ash/agent-loop.py'
+alias status='systemctl list-timers --all | grep ash'
+alias capture='DISPLAY=:0 python3 /usr/local/lib/ash/tools/computer_use.py capture'
+alias ocr='DISPLAY=:0 python3 /usr/local/lib/ash/tools/computer_use.py ocr'
+alias detect='DISPLAY=:0 python3 /usr/local/lib/ash/tools/computer_use.py detect'

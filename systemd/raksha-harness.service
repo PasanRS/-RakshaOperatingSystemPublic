@@ -1,0 +1,23 @@
+[Unit]
+Description=Raksha Harness — Executive Control Layer
+Documentation=https://github.com/PasanRS/Raksha-OS-Core
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=ravan
+Group=ravan
+WorkingDirectory=/opt/ash-core/harness
+ExecStart=/opt/ash-core/harness/venv/bin/python /opt/ash-core/harness/harness.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/lib/ash/logs/harness.log
+StandardError=append:/var/lib/ash/logs/harness.log
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/ash
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

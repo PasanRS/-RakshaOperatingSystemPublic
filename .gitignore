@@ -1,0 +1,75 @@
+# Git Ignore for Raksha OS
+
+# Large model files (use git-lfs or external storage)
+models/*.gguf
+models/*.bin
+/home/ravan/llama.cpp/models/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.venv
+
+# Local configs (machine-specific)
+config/honcho/.env
+config/ash/.env
+config/honcho/honcho.json
+config/suricata/suricata.yaml
+config/voice/venv/
+
+# Runtime data
+/var/lib/ash/logs/
+/var/lib/ash/screenshots/
+/var/lib/ash/tasks/
+/var/lib/ash/memory/sessions.db*
+/var/lib/ash/memory/*.db
+/var/lib/ash/agent.pipe
+/var/lib/ash/agent.response
+
+# Systemd (machine-specific overrides)
+config/systemd/*.d/
+
+# Bedrock (machine-specific)
+config/bedrock/strata/
+
+# Large soul archives (use git-lfs if needed)
+soul/kali-memories/
+soul/kali-dreams/
+soul/archive-cleaned/dreams/
+soul/archive-cleaned/light/
+soul/archive-cleaned/deep/
+
+# Model files
+*.gguf
+*.onnx
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Temporary
+*.tmp
+*.temp
+/tmp/builds/*.iso
+builds/*.squashfs
+
+# Build outputs
+builds/
+*.iso
+wget-log*
+overlay/usr/share/plymouth/themes/raksha/FUCKING*

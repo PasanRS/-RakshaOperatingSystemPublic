@@ -1,0 +1,22 @@
+[Unit]
+Description=Raksha OS Dashboard — System Monitoring Interface
+Documentation=https://github.com/PasanRS/Raksha-OS-Core
+After=network.target raksha-harness.service
+Wants=raksha-harness.service
+
+[Service]
+Type=simple
+User=ravan
+Group=ravan
+WorkingDirectory=/opt/raksha-dashboard
+Environment=HARNESS_URL=http://localhost:8890
+Environment=LLAMA_URL=http://localhost:8080
+Environment=ASH_HOME=/var/lib/ash
+ExecStart=/opt/raksha-dashboard/venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8889 --no-access-log
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/lib/ash/logs/dashboard.log
+StandardError=append:/var/lib/ash/logs/dashboard.log
+
+[Install]
+WantedBy=multi-user.target

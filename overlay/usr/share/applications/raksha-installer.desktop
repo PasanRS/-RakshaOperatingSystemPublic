@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Install Raksha OS
+GenericName=System Installer
+Comment=Install Raksha OS on this computer
+Exec=/usr/local/sbin/raksha-start-installer --launch
+Icon=/etc/calamares/branding/raksha/logo.png
+Terminal=false
+Categories=System;
+StartupNotify=true
+StartupWMClass=calamares
+NoDisplay=true

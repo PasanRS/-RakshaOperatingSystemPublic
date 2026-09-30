@@ -1,0 +1,13 @@
+NAME="Raksha OS"
+VERSION="1.0.0"
+ID=raksha
+ID_LIKE=debian
+PRETTY_NAME="Raksha OS 1.0.0"
+VERSION_ID="1.0.0"
+VERSION_CODENAME="awakening"
+HOME_URL="https://github.com/PasanRS/Raksha-OS-Core"
+SUPPORT_URL="https://github.com/PasanRS/Raksha-OS-Core/issues"
+BUG_REPORT_URL="https://github.com/PasanRS/Raksha-OS-Core/issues"
+PRIVACY_POLICY_URL="https://github.com/PasanRS/Raksha-OS-Core"
+BUILD_ID="1.0.0"
+LOGO="raksha-logo"

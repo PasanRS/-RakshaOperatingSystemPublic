@@ -1,0 +1,10 @@
+[Plymouth Theme]
+Name=Raksha OS
+Description=Sovereign AI boot animation
+Comment=Boot splash for Raksha OS — 27 frame animation
+Author=PasanRS
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/raksha
+ScriptFile=/usr/share/plymouth/themes/raksha/raksha.script

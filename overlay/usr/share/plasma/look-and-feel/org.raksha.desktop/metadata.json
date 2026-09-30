@@ -1,0 +1,18 @@
+{
+  "KPackageStructure": "Plasma/LookAndFeel",
+  "KPlugin": {
+    "Authors": [
+      {
+        "Name": "Raksha OS Project"
+      }
+    ],
+    "Category": "",
+    "Description": "Raksha OS desktop experience",
+    "Id": "org.raksha.desktop",
+    "License": "Proprietary",
+    "Name": "Raksha OS",
+    "Website": "https://github.com/PasanRS/Raksha-OS-Core"
+  },
+  "Keywords": "Raksha;Desktop;Workspace;Appearance;Look and Feel;"
+}
+

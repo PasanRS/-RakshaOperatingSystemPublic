@@ -1,0 +1,11 @@
+[Unit]
+Description=Ash Memory — Every 2h + 3am full consolidation
+
+[Timer]
+OnBootSec=5m
+OnUnitActiveSec=2h
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

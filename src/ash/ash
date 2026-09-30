@@ -1,0 +1,4 @@
+#!/bin/bash
+export ASH_HOME="${ASH_HOME:-/var/lib/ash}"
+export LLAMA_URL="${LLAMA_URL:-http://127.0.0.1:8080/v1/chat/completions}"
+exec python3 /usr/local/lib/ash/agent-loop.py "$@"

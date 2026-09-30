@@ -1,0 +1,43 @@
+#!/bin/sh
+set -eu
+
+if ! grep -Fq 'raksha.install=1' /proc/cmdline; then
+    exec /usr/bin/startplasma-x11
+fi
+
+# Dedicated graphical installer session. It intentionally does not start
+# plasmashell, so the Install boot entry cannot fall through to the live
+# desktop. KWin supplies correct decorations, placement and input handling.
+command -v xsetroot >/dev/null 2>&1 && xsetroot -solid '#020702'
+/usr/bin/kwin_x11 --replace &
+kwin_pid=$!
+
+cleanup() {
+    if [ -e /etc/fstab.orig.calamares ] && [ ! -e /etc/fstab ]; then
+        sudo -n mv /etc/fstab.orig.calamares /etc/fstab 2>/dev/null || true
+    fi
+    kill "${kwin_pid}" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+# Root is allowed onto this live X server; no desktop polkit agent is needed.
+xhost +SI:localuser:root >/dev/null 2>&1 || true
+sleep 2
+
+while :; do
+    if [ -e /etc/fstab ] && [ ! -e /etc/fstab.orig.calamares ]; then
+        sudo -n mv /etc/fstab /etc/fstab.orig.calamares
+    fi
+
+    sudo -n env \
+        DISPLAY="${DISPLAY:-:0}" \
+        XAUTHORITY="${XAUTHORITY:-}" \
+        HOME=/root \
+        QT_AUTO_SCREEN_SCALE_FACTOR=1 \
+        /usr/bin/calamares || true
+
+    if [ -e /etc/fstab.orig.calamares ] && [ ! -e /etc/fstab ]; then
+        sudo -n mv /etc/fstab.orig.calamares /etc/fstab
+    fi
+    sleep 2
+done

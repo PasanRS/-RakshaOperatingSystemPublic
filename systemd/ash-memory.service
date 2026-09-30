@@ -1,0 +1,13 @@
+[Unit]
+Description=Ash Memory — Dreaming and consolidation
+After=llama-server.service
+
+[Service]
+Type=oneshot
+User=ravan
+ExecStart=/usr/local/bin/ash-memory
+Environment=ASH_HOME=/var/lib/ash
+Environment=LLAMA_URL=http://127.0.0.1:8080/v1/chat/completions
+StandardOutput=append:/var/lib/ash/logs/memory.log
+StandardError=append:/var/lib/ash/logs/memory.log
+NoNewPrivileges=true

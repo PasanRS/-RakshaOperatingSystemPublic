@@ -1,0 +1,35 @@
+[Unit]
+Description=Ash Voice Interface — Continuous Real-Time Voice Pipeline (port 8891)
+Documentation=https://github.com/PasanRS/Raksha-OS-Core
+After=network.target raksha-harness.service llama-server.service
+Wants=raksha-harness.service
+
+[Service]
+Type=simple
+User=ravan
+Group=ravan
+WorkingDirectory=/opt/ash-core/voice
+
+# Environment
+Environment=ASH_HOME=/var/lib/ash
+Environment=VOICE_BASE=/opt/ash-core/voice
+Environment=HARNESS_URL=http://127.0.0.1:8890
+Environment=LLAMA_URL=http://127.0.0.1:8080/v1/chat/completions
+Environment=ASH_VOICE_PORT=8891
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-/var/lib/ash/identity/.env
+
+ExecStart=/opt/ash-core/voice/venv/bin/python /opt/ash-core/voice/server.py
+Restart=always
+RestartSec=8
+
+# Logging
+StandardOutput=append:/var/lib/ash/logs/interface.log
+StandardError=append:/var/lib/ash/logs/interface.log
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=false
+
+[Install]
+WantedBy=graphical.target

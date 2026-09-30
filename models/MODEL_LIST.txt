@@ -1,0 +1,8 @@
+# Optional GGUF models. These are not stored in git because of their size.
+# These are NOT stored in git - too large
+# Set MODELS_DIR to a directory containing the files before building.
+
+gemma-4-E2B_q4_0-it.gguf
+NVIDIA-Nemotron3-Nano-4B-Q4_K_M.gguf
+UI-TARS-2B-SFT-Q4_K_M.gguf
+UI-TARS-2B-SFT-mmproj-fp16.gguf

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Install Raksha OS
+Exec=/usr/local/sbin/raksha-start-installer --auto
+OnlyShowIn=KDE;
+X-KDE-autostart-after=panel
+X-KDE-autostart-phase=2

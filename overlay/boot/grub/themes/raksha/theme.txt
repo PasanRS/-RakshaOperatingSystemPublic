@@ -1,0 +1,68 @@
+# Raksha OS — GRUB Theme
+# 1920x1080 default, with 4x3 fallback
+
+# Global properties
+title-text: "Raksha OS"
+title-font: "DejaVu Sans Bold 32"
+title-color: "#d4f7d4"
+message-font: "DejaVu Sans 14"
+message-color: "#aaaaaa"
+message-bg-color: "#040a04"
+desktop-color: "#040a04"
+terminal-box: "terminal_box_*.png"
+terminal-font: "DejaVu Sans Mono 16"
+
+# Boot menu
++ boot_menu {
+    left = 15%
+    top = 25%
+    width = 70%
+    height = 55%
+    
+    item_font = "DejaVu Sans 18"
+    item_color = "#cadae0"
+    item_height = 44
+    item_spacing = 6
+    item_padding = 12
+    item_icon_space = 8
+    
+    selected_item_color = "#040a04"
+    selected_item_font = "DejaVu Sans Bold 18"
+    
+    # Background for menu items
+    item_pixmap_style = "item_*.png"
+    selected_item_pixmap_style = "selected_item_*.png"
+    
+    scrollbar = true
+    scrollbar_frame = "scrollbar_frame_*.png"
+    scrollbar_thumb = "scrollbar_thumb_*.png"
+}
+
+# Progress bar for boot
++ progress_bar {
+    id = "__timeout__"
+    left = 15%
+    top = 82%
+    width = 70%
+    height = 20
+    
+    show_text = false
+    text_color = "#2dd36f"
+    fg_color = "#2dd36f"
+    bg_color = "#0a1a0a"
+    border_color = "#2dd36f"
+    highlight_color = "#2dd36f"
+}
+
+# Label for bottom info
++ label {
+    left = 15%
+    top = 88%
+    width = 70%
+    height = 30
+    
+    text = "↑↓ Select  |  Enter Boot  |  E Edit  |  C Command"
+    color = "#666666"
+    font = "DejaVu Sans 12"
+    align = "center"
+}

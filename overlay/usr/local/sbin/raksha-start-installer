@@ -1,0 +1,45 @@
+#!/bin/sh
+set -eu
+
+is_live_session() {
+    grep -Fq 'boot=live' /proc/cmdline
+}
+
+install_desktop_icon() {
+    is_live_session || exit 0
+    desktop_dir="$(xdg-user-dir DESKTOP 2>/dev/null || printf '%s/Desktop' "$HOME")"
+    mkdir -p "$desktop_dir"
+    install -m 0755 /usr/share/applications/raksha-installer.desktop \
+        "$desktop_dir/raksha-installer.desktop"
+}
+
+launch_installer() {
+    is_live_session || exit 0
+    pgrep -x calamares >/dev/null 2>&1 && exit 0
+
+    # Debian's wrapper handles X11 access, the temporary live-media fstab and
+    # polkit correctly. Calamares itself uses Raksha's packaged configuration.
+    if [ -x /usr/bin/calamares-install-debian ]; then
+        exec /usr/bin/calamares-install-debian
+    fi
+    exec pkexec /usr/bin/calamares
+}
+
+case "${1:---auto}" in
+    --desktop-icon)
+        install_desktop_icon
+        ;;
+    --auto)
+        grep -Fq 'raksha.install=1' /proc/cmdline || exit 0
+        # Let Plasma, its polkit agent and X11 finish coming up first.
+        sleep 8
+        launch_installer
+        ;;
+    --launch)
+        launch_installer
+        ;;
+    *)
+        printf 'Usage: %s [--auto|--launch|--desktop-icon]\n' "$0" >&2
+        exit 2
+        ;;
+esac

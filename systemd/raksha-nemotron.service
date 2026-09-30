@@ -1,0 +1,14 @@
+[Unit]
+Description=Raksha OS Secondary Model — Nemotron-3-Nano (CPU, port 8081)
+After=network.target raksha-cognitive.service
+
+[Service]
+Type=simple
+User=ravan
+WorkingDirectory=/home/ravan/llama.cpp
+ExecStart=/usr/local/bin/llama-server -m /home/ravan/llama.cpp/models/NVIDIA-Nemotron3-Nano-4B-Q4_K_M.gguf -ngl 0 -c 1048576 -np 1 --port 8081 -t 4
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

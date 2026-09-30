@@ -1,0 +1,9 @@
+[Unit]
+Description=Ash Dreaming Reflex (Memory Consolidation)
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/ash-core/reflexes/dreaming.py
+User=root
+Group=root

@@ -1,0 +1,3 @@
+#!/bin/bash
+export ASH_HOME="${ASH_HOME:-/var/lib/ash}"
+exec python3 /usr/local/lib/ash/heartbeat.py "$@"

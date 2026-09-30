@@ -1,0 +1,7 @@
+[General]
+Name=Raksha OS
+Version=1.0.0
+LogoPath=/etc/calamares/branding/raksha/logo.png
+Website=https://github.com/PasanRS/Raksha-OS-Core
+UseOSReleaseVersion=true
+

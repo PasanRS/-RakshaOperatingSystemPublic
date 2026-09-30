@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raksha OS Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0f;
+            --bg-elevated: #11111a;
+            --border: #1e1e2e;
+            --fg: #e8e8ed;
+            --fg-muted: #6b6b7b;
+            --accent: #00d4aa;
+            --accent-dim: #00d4aa22;
+            --warning: #ffb84d;
+            --danger: #ff4d6a;
+            --info: #4db8ff;
+        }
+        * { font-family: 'Space Grotesk', sans-serif; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .bg-grid {
+            background-image: 
+                linear-gradient(rgba(0,212,170,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,212,170,0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+        .card {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            transition: all 0.2s ease;
+        }
+        .card:hover { border-color: var(--accent-dim); }
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+        .status-running { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+        .status-stopped { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+        .status-warning { background: var(--warning); box-shadow: 0 0 8px var(--warning); }
+        .metric-value { transition: all 0.2s ease; }
+        .metric-bar { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+        .metric-bar-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .pulse { animation: pulse 2s infinite; }
+    </style>
+</head>
+<body class="bg-[var(--bg)] text-[var(--fg)] min-h-screen bg-grid">
+    <div class="max-w-7xl mx-auto p-4 md:p-6">
+        <header class="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h1 class="text-3xl md:text-4xl font-bold tracking-tight">
+                    <span class="text-[var(--accent)]">🜂</span> Raksha OS
+                </h1>
+                <p class="text-[var(--fg-muted)] mt-1">Sovereign AI Operating System Dashboard</p>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2 p-2 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-lg">
+                    <span id="ws-status" class="status-dot status-stopped"></span>
+                    <span class="mono text-sm" id="last-update">Connecting...</span>
+                </div>
+                <button onclick="location.reload()" class="p-2 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-lg hover:border-[var(--accent)] transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div class="card p-4 xl:col-span-2">
+                <h2 class="flex items-center gap-2 text-lg font-semibold mb-4">
+                    <span class="text-[var(--accent)]">⚡</span> System Resources
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span>CPU</span>
+                            <span class="text-[var(--accent)] mono" id="cpu-val">0%</span>
+                        </div>
+                        <div class="metric-bar"><div class="metric-bar-fill" id="cpu-bar" style="width: 0%; background: linear-gradient(90deg, var(--accent), #00ffcc);"></div></div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span>Memory</span>
+                            <span class="text-[var(--info)] mono" id="mem-val">0%</span>
+                        </div>
+                        <div class="metric-bar"><div class="metric-bar-fill" id="mem-bar" style="width: 0%; background: linear-gradient(90deg, var(--info), #6dbfff);"></div></div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span>Disk</span>
+                            <span class="text-[var(--warning)] mono" id="disk-val">0%</span>
+                        </div>
+                        <div class="metric-bar"><div class="metric-bar-fill" id="disk-bar" style="width: 0%; background: linear-gradient(90deg, var(--warning), #ffd47a);"></div></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 pt-2 border-t border-[var(--border)]">
+                        <div>
+                            <span class="text-[var(--fg-muted)] text-xs block">Temperature</span>
+                            <span class="mono text-lg" id="temp-val">--°C</span>
+                        </div>
+                        <div>
+                            <span class="text-[var(--fg-muted)] text-xs block">Load Avg</span>
+                            <span class="mono text-lg" id="load-val">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card p-4">
+                <h2 class="flex items-center gap-2 text-lg font-semibold mb-4">
+                    <span class="text-[var(--info)]">🧠</span> Honcho Memory
+                </h2>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[var(--fg-muted)]">API Server</span>
+                        <span id="honcho-status" class="status-dot status-stopped"></span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-[var(--fg-muted)]">Deriver</span>
+                        <span id="deriver-status" class="status-dot status-stopped"></span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-[var(--fg-muted)]">Workspace</span>
+                        <span id="honcho-ws" class="mono text-sm text-[var(--fg-muted)]">--</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-[var(--fg-muted)]">Peers</span>
+                        <span id="honcho-peers" class="mono text-sm text-[var(--fg-muted)]">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card p-4">
+                <h2 class="flex items-center gap-2 text-lg font-semibold mb-4">
+                    <span class="text-[var(--accent)]">🤖</span> llama.cpp
+                </h2>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[var(--fg-muted)]">Server</span>
+                        <span id="llama-status" class="status-dot status-stopped"></span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-[var(--fg-muted)]">Models Loaded</span>
+                        <span id="llama-models" class="mono text-sm text-[var(--fg-muted)]">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card p-4">
+                <h2 class="flex items-center gap-2 text-lg font-semibold mb-4">
+                    <span class="text-[var(--warning)]">📚</span> Ash Memory
+                </h2>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[var(--fg-muted)]">Memory</span>
+                        <span id="ash-mem" class="mono text-sm text-[var(--fg-muted)]">--</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-[var(--fg-muted)]">Sessions DB</span>
+                        <span id="ash-sessions" class="mono text-sm text-[var(--fg-muted)]">--</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-[var(--fg-muted)]">Tailscale</span>
+                        <span id="tailscale-status" class="status-dot status-stopped"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card p-4 xl:col-span-2">
+                <h2 class="flex items-center gap-2 text-lg font-semibold mb-4">
+                    <span class="text-[var(--accent)]">⚙️</span> Systemd Services
+                </h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-left text-[var(--fg-muted)] border-b border-[var(--border)]">
+                                <th class="pb-2 px-2">Service</th>
+                                <th class="pb-2 px-2 text-center">Status</th>
+                                <th class="pb-2 px-2 text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="services-table" class="divide-y divide-[var(--border)]">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card p-4 xl:col-span-2">
+                <h2 class="flex items-center gap-2 text-lg font-semibold mb-4">
+                    <span class="text-[var(--accent)]">🜂</span> Ash Core Services
+                </h2>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="ash-services">
+                </div>
+            </div>
+
+            <div class="card p-4 xl:col-span-4">
+                <h2 class="flex items-center gap-2 text-lg font-semibold mb-4">
+                    <span class="text-[var(--accent)]">📝</span> Live Status
+                </h2>
+                <div class="bg-[var(--bg)] border border-[var(--border)] rounded-lg p-4 max-h-64 overflow-y-auto mono text-sm" id="live-logs">
+                    <div class="text-[var(--fg-muted)]">Connecting to websocket...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ws = new WebSocket(`ws://${location.host}/ws`);
+        const logEl = document.getElementById('live-logs');
+
+        ws.onopen = () => { document.getElementById('ws-status').className = 'status-dot status-running'; };
+        ws.onclose = () => { document.getElementById('ws-status').className = 'status-dot status-stopped'; setTimeout(() => location.reload(), 5000); };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            updateDashboard(data);
+            addLog(`[${new Date().toLocaleTimeString()}] Status updated`);
+        };
+
+        function updateDashboard(data) {
+            document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+
+            const r = data.resources;
+            if (r) {
+                document.getElementById('cpu-val').textContent = `${r.cpu_percent?.toFixed(1) || 0}%`;
+                document.getElementById('cpu-bar').style.width = `${r.cpu_percent || 0}%`;
+
+                const memPct = r.memory ? (r.memory.percent || 0) : 0;
+                document.getElementById('mem-val').textContent = `${memPct.toFixed(1)}%`;
+                document.getElementById('mem-bar').style.width = `${memPct}%`;
+
+                const diskPct = r.disk ? (r.disk.percent || 0) : 0;
+                document.getElementById('disk-val').textContent = `${diskPct.toFixed(1)}%`;
+                document.getElementById('disk-bar').style.width = `${diskPct}%`;
+
+                document.getElementById('temp-val').textContent = r.temperature ? `${r.temperature}°C` : '--°C';
+                document.getElementById('load-val').textContent = r.load_avg ? r.load_avg.map(x => x.toFixed(2)).join(', ') : '--';
+            }
+
+            const h = data.honcho;
+            const hs = document.getElementById('honcho-status');
+            const ds = document.getElementById('deriver-status');
+            if (h?.status === 'healthy') { hs.className = 'status-dot status-running'; }
+            else { hs.className = 'status-dot status-stopped'; }
+
+            const hw = data.honcho_workspace;
+            if (hw?.status === 'ok') document.getElementById('honcho-ws').textContent = hw.data?.name || 'OK';
+
+            const hp = data.honcho_peers;
+            if (Array.isArray(hp)) document.getElementById('honcho-peers').textContent = hp.length;
+
+            const l = data.llama;
+            if (l?.status === 'healthy') { document.getElementById('llama-status').className = 'status-dot status-running'; }
+            else { document.getElementById('llama-status').className = 'status-dot status-stopped'; }
+            if (l?.data?.data) document.getElementById('llama-models').textContent = l.data.data.length;
+
+            const a = data.ash_memory;
+            if (a) document.getElementById('ash-mem').textContent = a.memory_exists ? `${(a.memory_size/1024).toFixed(1)} KB` : 'Missing';
+            document.getElementById('ash-sessions').textContent = a.sessions_db_exists ? `${(a.sessions_db_size/1024/1024).toFixed(1)} MB` : 'Missing';
+
+            const ts = data.tailscale;
+            if (ts?.status === 'connected') { document.getElementById('tailscale-status').className = 'status-dot status-running'; }
+            else { document.getElementById('tailscale-status').className = 'status-dot status-stopped'; }
+
+            const services = data.services;
+            if (services) renderServicesTable(services);
+            if (services) renderAshServices(services);
+        }
+
+        function renderServicesTable(services) {
+            const tbody = document.getElementById('services-table');
+            const ashServices = ['ash-core','ash-heartbeat','ash-memory','ash-dreaming','ash-defibrillator','ash-interface','ash-voice','ash-telegram','ash-whatsapp','ash-whatsapp-bridge','ash-whatsapp-poller'];
+            const coreServices = ['honcho-api','honcho-deriver','llama-server','postgresql','suricata','tailscaled'];
+            const allTarget = [...ashServices, ...coreServices];
+
+            tbody.innerHTML = allTarget.map(s => {
+                const svc = services.find(x => x.service === s);
+                if (!svc) return '';
+                const active = svc.active;
+                return `
+                    <tr class="hover:bg-[var(--bg-elevated)]">
+                        <td class="py-2 px-2 mono text-sm">${s}</td>
+                        <td class="py-2 px-2 text-center">
+                            <span class="status-dot ${active ? 'status-running' : 'status-stopped'} mx-auto"></span>
+                        </td>
+                        <td class="py-2 px-2 text-center">
+                            <button onclick="serviceAction('${s}', '${active ? 'restart' : 'start'}')" class="text-xs px-2 py-1 bg-[var(--accent-dim)] border border-[var(--accent)] rounded hover:bg-[var(--accent)] transition-colors">
+                                ${active ? 'Restart' : 'Start'}
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderAshServices(services) {
+            const ashServices = ['ash-core','ash-heartbeat','ash-memory','ash-dreaming','ash-defibrillator','ash-interface','ash-voice','ash-telegram','ash-whatsapp','ash-whatsapp-bridge','ash-whatsapp-poller'];
+            const container = document.getElementById('ash-services');
+            container.innerHTML = ashServices.map(s => {
+                const svc = services.find(x => x.service === s);
+                if (!svc) return '';
+                return `
+                    <div class="p-3 bg-[var(--bg)] border border-[var(--border)] rounded-lg text-center">
+                        <div class="text-xs text-[var(--fg-muted)] mb-1">${s.replace('ash-','').toUpperCase()}</div>
+                        <span class="status-dot ${svc.active ? 'status-running' : 'status-stopped'} mx-auto"></span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function serviceAction(service, action) {
+            addLog(`[${new Date().toLocaleTimeString()}] ${action} ${service} (manual action needed via terminal)`);
+            alert(`Run: sudo systemctl ${action} ${service}`);
+        }
+
+        function addLog(msg) {
+            const div = document.createElement('div');
+            div.className = 'text-[var(--fg-muted)] border-l-2 border-[var(--border)] pl-2 py-0.5';
+            div.textContent = msg;
+            logEl.insertBefore(div, logEl.firstChild);
+            if (logEl.children.length > 50) logEl.lastChild.remove();
+        }
+
+        fetch('/api/status').then(r => r.json()).then(updateDashboard);
+        setInterval(() => fetch('/api/status').then(r => r.json()).then(updateDashboard), 10000);
+    </script>
+</body>
+</html>

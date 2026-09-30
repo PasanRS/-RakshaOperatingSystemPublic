@@ -1,0 +1,9 @@
+[Theme]
+type=image
+background=background.png
+logo=
+font=DejaVu Sans
+fontSize=16
+color=#d4f7d4
+primaryColor=#2dd36f
+secondaryColor=#050c09

@@ -1,0 +1,64 @@
+# Raksha OS Plymouth animation for Debian 13's script plugin.
+
+Window.SetBackgroundTopColor(0.015, 0.040, 0.015);
+Window.SetBackgroundBottomColor(0.000, 0.000, 0.000);
+
+frame_names[0] = "animation-0001.png";
+frame_names[1] = "animation-0002.png";
+frame_names[2] = "animation-0003.png";
+frame_names[3] = "animation-0004.png";
+frame_names[4] = "animation-0005.png";
+frame_names[5] = "animation-0006.png";
+frame_names[6] = "animation-0007.png";
+frame_names[7] = "animation-0008.png";
+frame_names[8] = "animation-0009.png";
+frame_names[9] = "animation-0010.png";
+frame_names[10] = "animation-0011.png";
+frame_names[11] = "animation-0012.png";
+frame_names[12] = "animation-0013.png";
+frame_names[13] = "animation-0014.png";
+frame_names[14] = "animation-0015.png";
+frame_names[15] = "animation-0016.png";
+frame_names[16] = "animation-0017.png";
+frame_names[17] = "animation-0018.png";
+frame_names[18] = "animation-0019.png";
+frame_names[19] = "animation-0020.png";
+frame_names[20] = "animation-0021.png";
+frame_names[21] = "animation-0022.png";
+frame_names[22] = "animation-0023.png";
+frame_names[23] = "animation-0024.png";
+frame_names[24] = "animation-0025.png";
+frame_names[25] = "animation-0026.png";
+frame_names[26] = "animation-0027.png";
+
+frame_index = 0;
+refresh_count = 0;
+frame_sprite = Sprite();
+
+fun draw_frame() {
+    image = Image(frame_names[frame_index]);
+    screen_width = Window.GetWidth();
+    screen_height = Window.GetHeight();
+    scale = Math.Max(screen_width / image.GetWidth(),
+                     screen_height / image.GetHeight());
+    image = image.Scale(image.GetWidth() * scale, image.GetHeight() * scale);
+    frame_sprite.SetImage(image);
+    frame_sprite.SetPosition(
+        Window.GetX() + screen_width / 2 - image.GetWidth() / 2,
+        Window.GetY() + screen_height / 2 - image.GetHeight() / 2,
+        0);
+}
+
+fun refresh_callback() {
+    refresh_count++;
+    if (refresh_count >= 3) {
+        refresh_count = 0;
+        frame_index++;
+        if (frame_index >= 27)
+            frame_index = 0;
+        draw_frame();
+    }
+}
+
+draw_frame();
+Plymouth.SetRefreshFunction(refresh_callback);

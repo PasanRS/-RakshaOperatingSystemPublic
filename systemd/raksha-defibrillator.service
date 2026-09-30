@@ -1,0 +1,14 @@
+[Unit]
+Description=Raksha OS OOB Defibrillator (Watchdog)
+After=network.target raksha-cognitive.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/raksha-defibrillator.sh
+Restart=always
+RestartSec=5
+# Runs as root/ravan to ensure it has the authority to run Timeshift and Reboot
+User=root 
+
+[Install]
+WantedBy=multi-user.target

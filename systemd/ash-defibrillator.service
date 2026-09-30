@@ -1,0 +1,12 @@
+[Unit]
+Description=Ash Defibrillator (Autonomic Reflex)
+After=network.target
+
+[Service]
+ExecStart=/bin/bash /opt/ash-core/reflexes/defibrillator.sh
+Restart=always
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target

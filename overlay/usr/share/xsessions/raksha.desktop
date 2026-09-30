@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=XSession
+Exec=/usr/local/sbin/raksha-session
+TryExec=/usr/local/sbin/raksha-session
+DesktopNames=KDE
+Name=Raksha OS
+Comment=Raksha OS live or dedicated installer session
+

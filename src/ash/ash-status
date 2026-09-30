@@ -1,0 +1,28 @@
+#!/bin/bash
+echo ""
+echo "╔══════════════════════════════════════╗"
+echo "║        ASH — RAKSHA OS STATUS        ║"
+echo "╚══════════════════════════════════════╝"
+echo ""
+echo "── Services ──────────────────────────"
+for svc in llama-server.service ash-core.timer ash-heartbeat.timer ash-memory.timer ash-voice.service; do
+  status=$(systemctl is-active $svc 2>/dev/null)
+  icon="✗"
+  [ "$status" = "active" ] && icon="✓"
+  printf "  %s %-35s %s\n" "$icon" "$svc" "$status"
+done
+echo ""
+echo "── Mind (llama-server:8080) ──────────"
+curl -s http://127.0.0.1:8080/health 2>/dev/null && echo " → OK" || echo " → DOWN"
+echo ""
+echo "── Last Heartbeat ────────────────────"
+cat /var/lib/ash/logs/heartbeat-latest.json 2>/dev/null | python3 -m json.tool 2>/dev/null | head -15 || echo "  No heartbeat yet"
+echo ""
+echo "── Task Queue ────────────────────────"
+sqlite3 /var/lib/ash/tasks/queue.db \
+  "SELECT id, status, type, substr(content,1,55) FROM task_queue ORDER BY created_at DESC LIMIT 5;" \
+  2>/dev/null || echo "  Empty"
+echo ""
+echo "── Recent Memory ─────────────────────"
+tail -10 /var/lib/ash/memory/MEMORY.md 2>/dev/null || echo "  No memory yet"
+echo ""

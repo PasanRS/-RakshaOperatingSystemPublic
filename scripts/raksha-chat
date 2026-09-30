@@ -1,0 +1,748 @@
+#!/usr/bin/env python3
+"""
+Raksha OS Terminal Gateway — Native CLI to Ash Core
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Direct connection to Ash's router-selected local mind (Gemma 8080 or Nemotron 8081) with full memory access:
+  - sessions.db (SQLite + FTS5)
+  - MEMORY.md / USER.md / SOUL.md (live)
+  - knowledge/ vault + Obsidian instincts
+  - Honcho sync (ASH-Vault workspace)
+
+Usage:
+  raksha-chat              # Interactive REPL
+  raksha-chat "query"      # Single query mode
+  raksha-chat --voice      # Voice-enabled session (STT/TTS)
+  raksha-chat --status     # System status
+  raksha-chat --memory     # Search memory
+"""
+
+import os
+import sys
+import json
+import time
+import sqlite3
+import argparse
+import subprocess
+import urllib.request
+from datetime import datetime
+from pathlib import Path
+
+# Skill Engine Integration
+sys.path.insert(0, str(Path(__file__).parent))
+from skill_engine import get_skill_engine
+
+# Computer Use Integration
+try:
+    from computer_use import computer_use, COMPUTER_USE_SCHEMA
+    COMPUTER_USE_AVAILABLE = True
+except Exception as e:
+    COMPUTER_USE_AVAILABLE = False
+    COMPUTER_USE_ERROR = str(e)
+
+# ═══════════════════════════════════════════════════════
+# CONSTANTS — Mirrors Ash's actual runtime paths
+# ═══════════════════════════════════════════════════════
+ASH_HOME       = Path("/var/lib/ash")
+SESSIONS_DB    = ASH_HOME / "memory" / "sessions.db"
+TASK_DB        = ASH_HOME / "tasks" / "queue.db"
+SOUL_FILE      = ASH_HOME / "identity" / "SOUL.md"
+MEMORY_FILE    = ASH_HOME / "memory" / "MEMORY.md"
+USER_FILE      = ASH_HOME / "memory" / "USER.md"
+HEARTBEAT_JSON = ASH_HOME / "logs" / "heartbeat-latest.json"
+KNOWLEDGE_DIR  = ASH_HOME / "knowledge"
+OBSIDIAN_VAULT = Path("/var/lib/raksha/obsidian/instincts/Vault")
+PIPE_PATH      = ASH_HOME / "agent.pipe"
+
+LLAMA_URL      = "http://127.0.0.1:8080/v1/chat/completions"
+LLAMA_MODEL    = "gemma-4-E2B_q4_0-it.gguf"
+MODEL_ROUTER_FILE = ASH_HOME / "harness" / "model-router.json"
+LOCAL_MODEL_ROUTES = {
+    "gemma": {
+        "name": "Gemma 4 E2B",
+        "url": "http://127.0.0.1:8080/v1/chat/completions",
+        "model": "gemma-4-E2B_q4_0-it.gguf",
+    },
+    "nemotron": {
+        "name": "Nemotron 3 Nano",
+        "url": "http://127.0.0.1:8081/v1/chat/completions",
+        "model": "NVIDIA-Nemotron3-Nano-4B-Q4_K_M.gguf",
+    },
+}
+
+def active_llm_route() -> dict:
+    active = ""
+    if MODEL_ROUTER_FILE.exists():
+        try:
+            active = json.loads(MODEL_ROUTER_FILE.read_text()).get("active", "").strip().lower()
+        except Exception:
+            active = ""
+    return LOCAL_MODEL_ROUTES.get(active, {
+        "name": "custom",
+        "url": LLAMA_URL,
+        "model": LLAMA_MODEL,
+    })
+
+# Load NVIDIA credentials if present (for fallback)
+ENV_FILE = ASH_HOME / "identity" / ".env"
+if ENV_FILE.exists():
+    for line in ENV_FILE.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip())
+
+NVIDIA_KEY   = os.environ.get("NVIDIA_API_KEY", "")
+NVIDIA_URL   = os.environ.get("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
+NVIDIA_MODEL = os.environ.get("NVIDIA_MODEL", "nvidia/nemotron-3-ultra-550b-a55b")
+
+# Colors for terminal
+class C:
+    R = "\033[0m"
+    B = "\033[1m"
+    D = "\033[2m"
+    G = "\033[32m"
+    Y = "\033[33m"
+    C = "\033[36m"
+    M = "\033[35m"
+    R = "\033[31m"
+    W = "\033[37m"
+
+# ═══════════════════════════════════════════════════════
+# MEMORY LAYER — Direct access to Ash's real memory
+# ═══════════════════════════════════════════════════════
+def init_db():
+    """Ensure sessions DB exists with correct schema."""
+    SESSIONS_DB.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(SESSIONS_DB))
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS sessions (
+            id INTEGER PRIMARY KEY, timestamp TEXT NOT NULL,
+            source TEXT DEFAULT 'user', input TEXT, response TEXT,
+            tools_used TEXT, significant INTEGER DEFAULT 0)
+    """)
+    conn.execute("""
+        CREATE VIRTUAL TABLE IF NOT EXISTS sessions_fts USING fts5(
+            input, response, content=sessions, content_rowid=id)
+    """)
+    conn.commit(); conn.close()
+
+    TASK_DB.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(TASK_DB))
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS task_queue (
+            id INTEGER PRIMARY KEY, created_at TEXT NOT NULL, type TEXT NOT NULL,
+            content TEXT NOT NULL, source TEXT DEFAULT 'system',
+            priority INTEGER DEFAULT 5, status TEXT DEFAULT 'pending',
+            processed_at TEXT)
+    """)
+    conn.commit(); conn.close()
+
+def recent_sessions(limit: int = 10) -> list:
+    """Pull recent conversation history from live sessions DB."""
+    try:
+        conn = sqlite3.connect(str(SESSIONS_DB))
+        rows = conn.execute(
+            "SELECT source, input, response FROM sessions "
+            "ORDER BY timestamp DESC LIMIT ?", (limit,)
+        ).fetchall()
+        conn.close()
+        history = []
+        for source, inp, resp in reversed(rows):
+            if inp:  history.append({"role": "user",      "content": inp})
+            if resp: history.append({"role": "assistant", "content": resp})
+        return history
+    except Exception:
+        return []
+
+def memory_search(query: str, limit: int = 5) -> str:
+    """FTS5 search across Ash's session memory."""
+    try:
+        conn = sqlite3.connect(str(SESSIONS_DB))
+        rows = conn.execute(
+            "SELECT input, response, timestamp FROM sessions "
+            "WHERE input LIKE ? OR response LIKE ? "
+            "ORDER BY timestamp DESC LIMIT ?",
+            (f"%{query}%", f"%{query}%", limit)
+        ).fetchall()
+        conn.close()
+        if not rows: return ""
+        hits = []
+        for inp, resp, ts in rows:
+            hits.append(f"[{ts}] Q: {inp}\n    A: {resp}")
+        return "\n---\n".join(hits)
+    except Exception:
+        return ""
+
+def vault_context(query: str = "", limit: int = 3) -> str:
+    """Sample Ash's subconscious Obsidian vault."""
+    hits = []
+    for vault in [OBSIDIAN_VAULT, KNOWLEDGE_DIR]:
+        if not vault.exists(): continue
+        for md in vault.rglob("*.md"):
+            try:
+                content = md.read_text(errors="replace")
+                if query and query.lower() not in content.lower(): continue
+                hits.append(f"### {md.stem}\n{content}")
+                if len(hits) >= limit: break
+            except Exception:
+                continue
+        if len(hits) >= limit: break
+    return "\n\n".join(hits)
+
+def system_status() -> str:
+    """Read Ash's latest heartbeat JSON."""
+    try:
+        if HEARTBEAT_JSON.exists():
+            hb = json.loads(HEARTBEAT_JSON.read_text())
+            disk = hb.get("disk", {})
+            ram  = hb.get("ram", {})
+            cpu  = hb.get("cpu", {})
+            temp = hb.get("temp", {})
+            return (f"CPU {cpu.get('percent',0)}% | "
+                    f"RAM {ram.get('percent',0)}% | "
+                    f"Disk {disk.get('free_gb','?')}GB free | "
+                    f"Temp {temp.get('celsius','?')}°C")
+    except Exception:
+        pass
+    return "Heartbeat unavailable"
+
+def load_ash_context(query: str = "") -> str:
+    """Build Ash's full system prompt from live memory files + skills + computer use."""
+    soul   = SOUL_FILE.read_text(errors="replace")   if SOUL_FILE.exists()   else "You are Ash."
+    memory = MEMORY_FILE.read_text(errors="replace")  if MEMORY_FILE.exists() else ""
+    user   = USER_FILE.read_text(errors="replace")    if USER_FILE.exists()   else ""
+    bhav   = vault_context(query)
+    status = system_status()
+
+    # Get skill context
+    skill_engine = get_skill_engine()
+    core_skills = skill_engine.get_core_skills_context(max_chars=2500)
+    dynamic_skills = skill_engine.get_context_for_query(query, max_skills=5, max_chars=2000)
+
+    # Computer Use context
+    cu_context = ""
+    if COMPUTER_USE_AVAILABLE:
+        cu_context = f"""
+## Computer Use (Linux Desktop)
+You have direct control over the Linux desktop via xdotool/scrot.
+Available actions: capture (screenshot + element detection), click, double_click, right_click, drag, scroll, type, key, wait, list_apps, focus_app.
+Usage: Emit tool calls as: {{"tool":"computer_use","args":{{"action":"capture","mode":"som","app":"firefox"}}}}
+Available: capture(mode=som|vision|ax, app?), click(element|coordinate), double_click, right_click, drag, scroll, type(text), key(keys), wait(seconds), list_apps, focus_app(app).
+Safety: Never click permission dialogs, password prompts, payment UI. Never type secrets.
+"""
+
+    bhav_sec   = f"\n## Bhavanga (Subconscious)\n{bhav}"      if bhav   else ""
+    status_sec = f"\n## System Status\n{status}"              if status else ""
+    skills_sec = f"\n{core_skills}\n{dynamic_skills}" if (core_skills or dynamic_skills) else ""
+
+    return f"""{soul}{cu_context}
+
+## Warm Memory
+{memory}
+
+## User Profile
+{user}{bhav_sec}{status_sec}{skills_sec}
+
+## Terminal Mode
+You are chatting with Pasan in a terminal session on Raksha OS.
+Be direct, concise, and natural. No markdown unless asked.
+Address Pasan directly. This is a text interface — speak as yourself.
+Time: {datetime.now().strftime('%Y-%m-%d %H:%M')} on Raksha OS."""
+
+def log_session(source: str, user_in: str, ash_out: str):
+    """Write conversation to Ash's real sessions DB."""
+    try:
+        conn = sqlite3.connect(str(SESSIONS_DB))
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute(
+            "INSERT INTO sessions (timestamp,source,input,response,tools_used,significant) "
+            "VALUES (?,?,?,?,?,?)",
+            (datetime.now().isoformat(), source,
+             user_in, ash_out, "[]", 1)
+        )
+        # Update FTS5
+        cursor = conn.execute("SELECT last_insert_rowid()")
+        rowid = cursor.fetchone()[0]
+        conn.execute("INSERT INTO sessions_fts(rowid, input, response) VALUES (?,?,?)",
+                     (rowid, user_in, ash_out))
+        conn.commit(); conn.close()
+    except Exception as e:
+        print(f"[MEM] DB error: {e}", file=sys.stderr)
+
+    # Sync to Honcho ASH-Vault
+    try:
+        honcho_bin = "/home/ravan/.local/bin/honcho"
+        if Path(honcho_bin).exists():
+            # Push user message
+            subprocess.Popen([honcho_bin, "message", "create", user_in,
+                              "-w", "ASH-Vault", "-s", "ash-primary", "-p", "pasan"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # Push model response
+            subprocess.Popen([honcho_bin, "message", "create", ash_out,
+                              "-w", "ASH-Vault", "-s", "ash-primary", "-p", "ash"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass  # Silent fail on Honcho sync
+
+def memory_write(content: str):
+    """Append to MEMORY.md — same as agent-loop."""
+    try:
+        MEMORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        entry = f"\n## Terminal Session — {datetime.now().strftime('%Y-%m-%d %H:%M')}\n{content}\n"
+        if MEMORY_FILE.exists():
+            MEMORY_FILE.write_text(MEMORY_FILE.read_text() + entry)
+        else:
+            MEMORY_FILE.write_text(f"# Ash Memory\n{entry}")
+    except Exception as e:
+        print(f"[MEM] Write error: {e}", file=sys.stderr)
+
+def enqueue_task(task_type: str, content: str, priority: int = 5):
+    """Enqueue a task for Ash's agent-loop to process."""
+    try:
+        conn = sqlite3.connect(str(TASK_DB))
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute(
+            "INSERT INTO task_queue (created_at,type,content,source,priority) "
+            "VALUES (?,?,?,?,?)",
+            (datetime.now().isoformat(), task_type, content, "terminal", priority)
+        )
+        conn.commit(); conn.close()
+        print(f"{C.D}[TASK] Enqueued: {task_type}: {content[:60]}{C.R}")
+    except Exception as e:
+        print(f"[TASK] Error: {e}", file=sys.stderr)
+
+# ═══════════════════════════════════════════════════════
+# LLM STREAMING
+# ═══════════════════════════════════════════════════════
+def llm_stream(messages: list, use_nvidia: bool = False):
+    """Yield text tokens from LLM stream."""
+    if use_nvidia and NVIDIA_KEY:
+        url = f"{NVIDIA_URL}/chat/completions"
+        headers = {"Content-Type": "application/json",
+                   "Authorization": f"Bearer {NVIDIA_KEY}"}
+        payload = {"model": NVIDIA_MODEL, "messages": messages,
+                   "max_tokens": 1024, "temperature": 0.9, "stream": True}
+    else:
+        route = active_llm_route()
+        url = route["url"]
+        headers = {"Content-Type": "application/json"}
+        payload = {"model": route["model"], "messages": messages,
+                   "max_tokens": 1024, "temperature": 0.7, "stream": True}
+
+    req = urllib.request.Request(url, json.dumps(payload).encode(), headers)
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            for raw_line in resp:
+                line = raw_line.decode().strip()
+                if not line.startswith("data:"):
+                    continue
+                chunk = line[5:].strip()
+                if chunk == "[DONE]":
+                    return
+                try:
+                    delta = json.loads(chunk)["choices"][0]["delta"]
+                    content = delta.get("content", "")
+                    if content:
+                        yield content
+                except Exception:
+                    continue
+    except Exception as e:
+        yield f" Error: {e}"
+
+# ═══════════════════════════════════════════════════════
+# REPL INTERFACE
+# ═══════════════════════════════════════════════════════
+def print_banner():
+    print(f"{C.C}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{C.R}")
+    print(f"{C.B}   Raksha OS Terminal Gateway — Ash Core Link{C.R}")
+    route = active_llm_route()
+    print(f"{C.D}   Connected to {route['name']} | Sessions DB live | Honcho sync | 1474 Skills{C.R}")
+    print(f"{C.C}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━{C.R}")
+    print(f"{C.D}Commands: /exit  /status  /memory <query>  /vault <query>  /skill <name>  /skills [query]  /task <type> <content>  /clear{C.R}")
+    print(f"{C.D}Options:  --nvidia (use Nemotron)  --voice (STT/TTS loop){C.R}")
+    print()
+
+def repl(use_nvidia: bool = False):
+    """Interactive REPL loop."""
+    init_db()
+    print_banner()
+
+    # Seed history from DB
+    conv_history = recent_sessions(limit=8)
+    if conv_history:
+        print(f"{C.G}[MEM] Loaded {len(conv_history)//2} recent turns from sessions DB{C.R}")
+
+    while True:
+        try:
+            user_input = input(f"{C.B}{C.C}▸ {C.R}").strip()
+        except (EOFError, KeyboardInterrupt):
+            print(f"\n{C.Y}Going dark.{C.R}")
+            break
+
+        if not user_input:
+            continue
+
+        # Slash commands
+        if user_input.startswith("/"):
+            cmd = user_input[1:].split()
+            if not cmd:
+                continue
+            c = cmd[0].lower()
+
+            if c in ("exit", "quit", "q"):
+                print(f"{C.Y}Going dark.{C.R}")
+                break
+
+            elif c == "status":
+                print(f"{C.M}══ SYSTEM STATUS ══{C.R}")
+                print(f"  {system_status()}")
+                try:
+                    conn = sqlite3.connect(str(SESSIONS_DB))
+                    count = conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+                    conn.close()
+                    print(f"  Sessions in DB: {count}")
+                except:
+                    pass
+                print(f"  Memory file: {'✓' if MEMORY_FILE.exists() else '✗'} ({MEMORY_FILE})")
+                print(f"  Soul file:   {'✓' if SOUL_FILE.exists() else '✗'} ({SOUL_FILE})")
+                print(f"  User file:   {'✓' if USER_FILE.exists() else '✗'} ({USER_FILE})")
+                print(f"  Honcho bin:  {'✓' if Path('/home/ravan/.local/bin/honcho').exists() else '✗'}")
+                continue
+
+            elif c == "memory":
+                q = " ".join(cmd[1:])
+                if not q:
+                    print(f"{C.D}Usage: /memory <query>{C.R}")
+                    continue
+                print(f"{C.M}══ MEMORY SEARCH: {q} ══{C.R}")
+                results = memory_search(q, limit=5)
+                print(results if results else f"  {C.D}(no matches){C.R}")
+                continue
+
+            elif c == "vault":
+                q = " ".join(cmd[1:])
+                print(f"{C.M}══ OBSIDIAN VAULT ══{C.R}")
+                results = vault_context(q, limit=3)
+                print(results if results else f"  {C.D}(no matches){C.R}")
+                continue
+
+            elif c == "task":
+                if len(cmd) < 3:
+                    print(f"{C.D}Usage: /task <type> <content>{C.R}")
+                    continue
+                ttype = cmd[1]
+                content = " ".join(cmd[2:])
+                enqueue_task(ttype, content)
+                continue
+
+            elif c == "clear":
+                conv_history = []
+                print(f"{C.G}[MEM] Session history cleared (DB preserved){C.R}")
+                continue
+
+            elif c == "skill":
+                if len(cmd) < 2:
+                    print(f"{C.D}Usage: /skill <name> — Show skill details{C.R}")
+                    continue
+                skill_name = " ".join(cmd[1:])
+                skill_engine = get_skill_engine()
+                skill = skill_engine.get_skill(skill_name)
+                if skill:
+                    print(f"{C.M}══ SKILL: {skill.name} ({skill.bundle}) ══{C.R}")
+                    print(f"  {skill.description}")
+                    if skill.capabilities:
+                        print(f"  {C.C}Capabilities:{C.R} {', '.join(skill.capabilities[:8])}")
+                    if skill.triggers:
+                        print(f"  {C.C}Triggers:{C.R} {', '.join(skill.triggers[:8])}")
+                    if skill.related:
+                        print(f"  {C.C}Related:{C.R} {', '.join(skill.related[:8])}")
+                else:
+                    # Try search
+                    results = skill_engine.find_skills(skill_name, limit=5)
+                    if results:
+                        print(f"{C.D}Skill not found exactly. Similar:{C.R}")
+                        for s in results:
+                            print(f"  {s.name} ({s.bundle}) — {s.description[:60]}")
+                    else:
+                        print(f"{C.D}No skill found: {skill_name}{C.R}")
+                continue
+
+            elif c == "skills":
+                q = " ".join(cmd[1:])
+                skill_engine = get_skill_engine()
+                if q:
+                    results = skill_engine.find_skills(q, limit=10)
+                    print(f"{C.M}══ SKILLS: {q} ══{C.R}")
+                    for s in results:
+                        print(f"  {s.name} ({s.bundle}) — {s.description[:80]}")
+                else:
+                    # Show core skills
+                    print(f"{C.M}══ CORE SKILLS ══{C.R}")
+                    core_names = [
+                        "ai-agents-architect", "prompt-engineering", "rag-engineer",
+                        "agent-memory-systems", "autonomous-agent-patterns", "multi-agent-patterns",
+                        "agent-orchestrator", "tool-use-guardian", "mcp-builder",
+                        "linux-shell-scripting", "bash-pro", "systems-programming",
+                        "security-audit", "threat-modeling-expert", "observability-engineer",
+                        "voice-agents", "voice-ai-development", "audio-transcriber",
+                    ]
+                    for name in core_names:
+                        skill = skill_engine.get_skill(name)
+                        if skill:
+                            print(f"  {C.G}{skill.name}{C.R} ({skill.bundle})")
+                continue
+
+            elif c == "focus":
+                if len(cmd) < 2:
+                    print(f"{C.D}Usage: /focus <app>{C.R}")
+                    continue
+                if not COMPUTER_USE_AVAILABLE:
+                    print(f"{C.D}Computer use not available: {COMPUTER_USE_ERROR}{C.R}")
+                    continue
+                app = " ".join(cmd[1:])
+                print(f"{C.G}[Computer] Focusing: {app}{C.R}")
+                result = computer_use("focus_app", app=app, raise_window=False)
+                print(f"  {result}")
+                continue
+
+            elif c == "capture":
+                if not COMPUTER_USE_AVAILABLE:
+                    print(f"{C.D}Computer use not available: {COMPUTER_USE_ERROR}{C.R}")
+                    continue
+                app = " ".join(cmd[1:]) if len(cmd) > 1 else None
+                print(f"{C.G}[Computer] Capturing screenshot...{C.R}")
+                result = computer_use("capture", mode="som", app=app)
+                if "error" in result:
+                    print(f"  {C.D}Error: {result['error']}{C.R}")
+                else:
+                    print(f"  ✓ Screenshot: {result.get('screenshot', 'saved')}")
+                    print(f"  Size: {result.get('width', 0)}x{result.get('height', 0)}")
+                    if result.get("elements"):
+                        print(f"  Elements detected: {len(result['elements'])}")
+                continue
+
+            elif c == "click":
+                if len(cmd) < 2:
+                    print(f"{C.D}Usage: /click <element_index>{C.R}")
+                    continue
+                if not COMPUTER_USE_AVAILABLE:
+                    print(f"{C.D}Computer use not available: {COMPUTER_USE_ERROR}{C.R}")
+                    continue
+                try:
+                    element = int(cmd[1])
+                except ValueError:
+                    print(f"{C.D}Element must be an integer{C.R}")
+                    continue
+                print(f"{C.G}[Computer] Clicking element {element}...{C.R}")
+                result = computer_use("click", element=element, capture_after=True)
+                if "error" in result:
+                    print(f"  {C.D}Error: {result['error']}{C.R}")
+                else:
+                    print(f"  ✓ Clicked at ({result.get('x', '?')}, {result.get('y', '?')})")
+                continue
+
+            elif c == "type":
+                if len(cmd) < 2:
+                    print(f"{C.D}Usage: /type <text>{C.R}")
+                    continue
+                if not COMPUTER_USE_AVAILABLE:
+                    print(f"{C.D}Computer use not available: {COMPUTER_USE_ERROR}{C.R}")
+                    continue
+                text = " ".join(cmd[1:])
+                print(f"{C.G}[Computer] Typing: {text[:50]}{'...' if len(text)>50 else ''}{C.R}")
+                result = computer_use("type_text", text=text)
+                print(f"  {result}")
+                continue
+
+            elif c == "key":
+                if len(cmd) < 2:
+                    print(f"{C.D}Usage: /key <keys> (e.g., ctrl+c, return, alt+tab){C.R}")
+                    continue
+                if not COMPUTER_USE_AVAILABLE:
+                    print(f"{C.D}Computer use not available: {COMPUTER_USE_ERROR}{C.R}")
+                    continue
+                keys = " ".join(cmd[1:])
+                print(f"{C.G}[Computer] Sending key: {keys}{C.R}")
+                result = computer_use("key", keys=keys)
+                print(f"  {result}")
+                continue
+
+            elif c == "scroll":
+                if len(cmd) < 2:
+                    print(f"{C.D}Usage: /scroll <up|down|left|right> [amount]{C.R}")
+                    continue
+                if not COMPUTER_USE_AVAILABLE:
+                    print(f"{C.D}Computer use not available: {COMPUTER_USE_ERROR}{C.R}")
+                    continue
+                direction = cmd[1].lower()
+                amount = int(cmd[2]) if len(cmd) > 2 else 3
+                print(f"{C.G}[Computer] Scrolling {direction} x{amount}...{C.R}")
+                result = computer_use("scroll", direction=direction, amount=amount)
+                print(f"  {result}")
+                continue
+
+            elif c == "apps":
+                if not COMPUTER_USE_AVAILABLE:
+                    print(f"{C.D}Computer use not available: {COMPUTER_USE_ERROR}{C.R}")
+                    continue
+                print(f"{C.G}[Computer] Listing windows...{C.R}")
+                result = computer_use("list_apps")
+                if isinstance(result, list):
+                    for app in result[:20]:
+                        title = app.get('title', 'unknown')[:60]
+                        cls = app.get('class', 'unknown')
+                        print(f"  {app.get('window_id', '?')}  {cls}  {title}")
+                    if len(result) > 20:
+                        print(f"  ... and {len(result) - 20} more")
+                else:
+                    print(f"  {result}")
+                continue
+
+            elif c == "help":
+                print(f"""
+{C.M}Commands:{C.R}
+  /exit              — End session
+  /status            — Show system health
+  /memory <query>    — Search session memory (FTS5)
+  /vault <query>     — Search Obsidian knowledge vault
+  /skill <name>      — Show skill details
+  /skills [query]    — List core skills or search skills
+  /task <type> <txt> — Enqueue task for agent-loop
+  /clear             — Clear in-session history
+  /capture [app]     — Screenshot (mode=som, optional app)
+  /click <element>   — Click element from last capture
+  /type <text>       — Type text
+  /key <keys>        — Key combo (e.g., ctrl+c, return)
+  /scroll <dir>      — Scroll up/down/left/right
+  /apps              — List windows
+  /focus <app>       — Focus app window
+  /help              — This help
+
+{C.M}Options:{C.R}
+  --nvidia           — Use Nemotron 3 Ultra via NVIDIA API
+  --voice            — Voice I/O loop (requires raksha-vocie venv)
+                """)
+                continue
+
+            else:
+                print(f"{C.D}Unknown command: /{c} — try /help{C.R}")
+                continue
+
+        # Regular query — send to LLM
+        system_prompt = load_ash_context(query=user_input)
+
+        messages = [{"role": "system", "content": system_prompt}]
+        messages.extend(conv_history[-20:])
+        messages.append({"role": "user", "content": user_input})
+
+        print(f"{C.M}Ash{C.R} ", end="", flush=True)
+
+        full_response = ""
+        for token in llm_stream(messages, use_nvidia):
+            print(token, end="", flush=True)
+            full_response += token
+        print()  # newline after stream
+
+        # Update history
+        conv_history.append({"role": "user",      "content": user_input})
+        conv_history.append({"role": "assistant", "content": full_response})
+
+        # Persist
+        log_session("terminal", user_input, full_response)
+
+        # Auto-write significant moments to MEMORY.md
+        sig_keywords = ["remember", "important", "don't forget", "note that",
+                        "first time", "hello", "hi ash", "good morning", "good night"]
+        if len(conv_history) <= 4 or any(k in user_input.lower() for k in sig_keywords):
+            memory_write(f"Pasan said: \"{user_input}\"\nAsh replied: \"{full_response}\"")
+
+def single_query(query: str, use_nvidia: bool = False):
+    """Single query mode — for scripting/piping."""
+    init_db()
+    conv_history = recent_sessions(limit=6)
+
+    system_prompt = load_ash_context(query=query)
+    messages = [{"role": "system", "content": system_prompt}]
+    messages.extend(conv_history[-20:])
+    messages.append({"role": "user", "content": query})
+
+    for token in llm_stream(messages, use_nvidia):
+        print(token, end="", flush=True)
+    print()
+
+    # Persist
+    log_session("terminal", query, "streamed")
+
+def status_only():
+    """Just print status and exit."""
+    init_db()
+    print(f"{C.M}══ RAKSHA OS STATUS ══{C.R}")
+    print(f"  {system_status()}")
+    try:
+        conn = sqlite3.connect(str(SESSIONS_DB))
+        count = conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+        conn.close()
+        print(f"  Sessions in DB: {count}")
+    except:
+        pass
+    print(f"  LLM: {LLAMA_MODEL} @ {LLAMA_URL}")
+    print(f"  Memory: {'✓' if MEMORY_FILE.exists() else '✗'}")
+    print(f"  Soul:   {'✓' if SOUL_FILE.exists() else '✗'}")
+    print(f"  User:   {'✓' if USER_FILE.exists() else '✗'}")
+
+def memory_only(query: str):
+    """Search memory and exit."""
+    init_db()
+    results = memory_search(query, limit=10)
+    if results:
+        print(results)
+    else:
+        print(f"{C.D}(no matches in sessions DB){C.R}")
+        # Try vault
+        vault_results = vault_context(query, limit=5)
+        if vault_results:
+            print(f"\n{C.C}--- Obsidian Vault ---{C.R}")
+            print(vault_results)
+
+# ═══════════════════════════════════════════════════════
+# ENTRY POINT
+# ═══════════════════════════════════════════════════════
+def main():
+    parser = argparse.ArgumentParser(
+        description="Raksha OS Terminal Gateway — Direct line to Ash Core",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  raksha-chat                    # Interactive REPL
+  raksha-chat "system status"    # Single query
+  raksha-chat --nvidia "deep analysis"  # Use Nemotron
+  raksha-chat --status           # Quick health check
+  raksha-chat --memory "factory" # Search session memory
+        """
+    )
+    parser.add_argument("query", nargs="*", help="Single query (non-interactive)")
+    parser.add_argument("--nvidia", action="store_true", help="Use NVIDIA Nemotron model")
+    parser.add_argument("--voice", action="store_true", help="Voice I/O loop (not yet implemented)")
+    parser.add_argument("--status", action="store_true", help="Show system status and exit")
+    parser.add_argument("--memory", metavar="QUERY", help="Search session memory and exit")
+    args = parser.parse_args()
+
+    if args.status:
+        status_only()
+        return
+
+    if args.memory:
+        memory_only(args.memory)
+        return
+
+    if args.query:
+        single_query(" ".join(args.query), use_nvidia=args.nvidia)
+        return
+
+    # Interactive REPL
+    repl(use_nvidia=args.nvidia)
+
+if __name__ == "__main__":
+    main()

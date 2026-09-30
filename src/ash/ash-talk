@@ -1,0 +1,11 @@
+#!/bin/bash
+if [ -z "$1" ]; then echo "Usage: ash-talk \"your message\""; exit 1; fi
+echo "$1" > /var/lib/ash/agent.pipe
+echo "[→ Ash] Sent: $1"
+sleep 3
+if [ -f /var/lib/ash/agent.response ]; then
+  echo "[← Ash]"
+  cat /var/lib/ash/agent.response
+else
+  echo "[Ash not responding — check: systemctl status ash-core.timer]"
+fi

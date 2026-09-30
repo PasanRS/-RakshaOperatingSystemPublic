@@ -1,0 +1,6 @@
+[General]
+BrowserApplication=firefox-esr.desktop
+
+[KDE]
+LookAndFeelPackage=org.raksha.desktop
+

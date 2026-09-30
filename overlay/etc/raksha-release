@@ -1,0 +1,9 @@
+NAME="Raksha OS"
+VERSION="0.1.0-alpha"
+ID=raksha
+ID_LIKE=debian
+PRETTY_NAME="Raksha OS 0.1.0-alpha"
+VERSION_ID="0.1.0"
+HOME_URL="https://github.com/PasanRS/Raksha-OS-Core"
+SUPPORT_URL="https://github.com/PasanRS/Raksha-OS-Core/issues"
+BUG_REPORT_URL="https://github.com/PasanRS/Raksha-OS-Core/issues"

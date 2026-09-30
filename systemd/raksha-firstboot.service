@@ -1,0 +1,16 @@
+[Unit]
+Description=Raksha OS — Installed-System First Boot Setup
+After=multi-user.target network.target
+ConditionPathExists=/var/lib/raksha/installed
+ConditionPathExists=!/var/lib/raksha/.first-boot-done
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/raksha-firstboot
+RemainAfterExit=yes
+StandardOutput=journal+console
+StandardError=journal+console
+TimeoutStartSec=600
+
+[Install]
+WantedBy=multi-user.target
